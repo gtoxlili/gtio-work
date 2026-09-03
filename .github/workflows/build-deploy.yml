@@ -1,0 +1,128 @@
+# Build and publish www.gtio.work.
+#
+# Required repository secret:
+# - PROD_DEPLOY_SSH_PRIVATE_KEY  ed25519 private key whose public half is in
+#                                ~/.ssh/authorized_keys on the origin box.
+#                                Repo-level rather than environment-level:
+#                                deployment environments need GitHub Pro on a
+#                                private repository, and this account is Free.
+# Required repository variables:
+# - PROD_DEPLOY_HOST, PROD_DEPLOY_USER   (PROD_DEPLOY_PORT defaults to 22)
+name: Build and Deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+  ARTIFACT_NAME: gtio-work-dist
+  DEPLOY_HOST: ${{ vars.PROD_DEPLOY_HOST }}
+  DEPLOY_PORT: ${{ vars.PROD_DEPLOY_PORT || '22' }}
+  DEPLOY_USER: ${{ vars.PROD_DEPLOY_USER }}
+
+jobs:
+  verify:
+    name: Verify and Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # `git describe --tags` in vite.config.ts stamps __APP_VERSION__ into
+          # the console note; a shallow clone would flatten every build to the
+          # same short hash with no tag context.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        # Version comes from `packageManager` in site/package.json rather than
+        # `latest`: pnpm 11 moved settings out of package.json into
+        # pnpm-workspace.yaml, so a floating major silently changed where the
+        # build-script policy is read from. CI and a laptop now agree.
+        uses: pnpm/action-setup@v5
+        with:
+          package_json_file: site/package.json
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Build production bundle
+        run: pnpm build
+
+      - name: Pack static artifact
+        run: tar -C dist -czf "../${ARTIFACT_NAME}.tar.gz" .
+
+      - name: Upload static artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Production
+    needs: verify
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        # deploy/deploy.sh and the two nginx confs it ships are the deploy logic;
+        # CI runs the same script the operator runs by hand.
+        uses: actions/checkout@v6
+
+      - name: Download static artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: .
+
+      - name: Unpack static artifact
+        run: |
+          mkdir -p site/dist
+          tar -xzf "${ARTIFACT_NAME}.tar.gz" -C site/dist
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Pin the host key
+        # Recorded once rather than passing StrictHostKeyChecking=no, so a
+        # changed host key fails the deploy instead of being accepted silently.
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -t ed25519 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        run: ./deploy/deploy.sh --no-build
