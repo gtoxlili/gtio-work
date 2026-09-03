@@ -1,0 +1,82 @@
+# Recount the ledger once a day.
+#
+# Required repository secret:
+# - STATS_TOKEN  A personal access token with `repo` and `read:user`. `repo` is
+#                what lets the count see commits in private repositories; the
+#                default GITHUB_TOKEN cannot, and a push made with it would not
+#                start Build and Deploy either.
+#
+# Nothing is committed unless a number moved, so a quiet day leaves no trace.
+name: Ledger
+
+on:
+  schedule:
+    # 19:30 UTC, which is early morning in the timezone this gets written in,
+    # so a day's commits are all in by the time they are counted.
+    - cron: "30 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  recount:
+    name: Recount
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the token is present
+        env:
+          STATS_TOKEN: ${{ secrets.STATS_TOKEN }}
+        run: |
+          if [ -z "$STATS_TOKEN" ]; then
+            echo "STATS_TOKEN is not set. Without it the counts would silently drop" >&2
+            echo "every private repository, which is most of them." >&2
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # Checking out with the PAT leaves it in the remote, so the push below
+          # counts as a push by a person and starts Build and Deploy.
+          token: ${{ secrets.STATS_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          package_json_file: site/package.json
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+
+      - name: Recount
+        env:
+          GH_TOKEN: ${{ secrets.STATS_TOKEN }}
+        run: pnpm github
+        working-directory: site
+
+      - name: Commit if anything moved
+        run: |
+          if git diff --quiet -- site/src/data/github.json; then
+            echo "No change. Nothing to deploy."
+            exit 0
+          fi
+          git diff -- site/src/data/github.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Recount the ledger" -- site/src/data/github.json
+          git push

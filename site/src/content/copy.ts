@@ -93,13 +93,17 @@ export const dayJob = {
 export const ledger = {
   title: { en: 'Ledger', zh: '账本' } as Bi,
   note: {
-    en: `Counted from GitHub on ${gh.fetchedAt.slice(0, 10)}, public repositories only.`,
-    zh: `${gh.fetchedAt.slice(0, 10)} 从 GitHub 统计，只算公开仓库。`,
+    en: `Counted from GitHub on ${gh.fetchedAt.slice(0, 10)}.`,
+    zh: `${gh.fetchedAt.slice(0, 10)} 从 GitHub 统计。`,
   } as Bi,
   rows: [
     {
       label: { en: 'Commits, last twelve months', zh: '过去十二个月的 commit' },
       value: gh.commitsLastYear.toLocaleString('en-US'),
+    },
+    {
+      label: { en: 'Of those, in public repositories', zh: '其中公开仓库' },
+      value: gh.publicCommitsLastYear.toLocaleString('en-US'),
     },
     {
       label: { en: 'Repositories touched, last twelve months', zh: '过去十二个月动过的仓库' },
@@ -109,14 +113,7 @@ export const ledger = {
       label: { en: 'Stars across public repositories', zh: '公开仓库的星星' },
       value: gh.stars.toLocaleString('en-US'),
     },
-    { label: { en: 'Languages, by volume', zh: '语言，按代码量' }, value: 'TypeScript, Rust, Go, Python' },
-    {
-      label: { en: 'Where it all runs', zh: '这些都跑在哪' },
-      value: {
-        en: 'One server, nginx with HTTP/3, behind Cloudflare',
-        zh: '一台服务器，nginx 开着 HTTP/3，Cloudflare 在前面',
-      } as Bi,
-    },
+    { label: { en: 'Languages, by volume', zh: '语言，按代码量' }, value: gh.languages.join(', ') },
   ] as { label: Bi; value: string | Bi }[],
 }
 

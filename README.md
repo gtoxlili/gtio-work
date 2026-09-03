@@ -39,9 +39,9 @@ pnpm dev       # localhost:5173
 pnpm build     # type-check, bundle, prerender both languages, compress
 ```
 
-`pnpm lint` is Biome. `pnpm github` refreshes the counts in the ledger. Those
-are a dated snapshot rather than a live query, so it runs when someone decides
-to and not on every deploy.
+`pnpm lint` is Biome. `pnpm github` recounts the ledger, and a scheduled
+workflow runs it once a day; it writes only when a number moves, and that commit
+is what triggers the next deploy.
 
 The pictures the site serves are committed under `site/public`. `pnpm images`
 rebuilds them from the full-size plates, which live outside this repository, so
