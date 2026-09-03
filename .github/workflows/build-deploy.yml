@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           # `git describe --tags` in vite.config.ts stamps __APP_VERSION__ into
           # the console note; a shallow clone would flatten every build to the
@@ -53,13 +53,13 @@ jobs:
         # `latest`: pnpm 11 moved settings out of package.json into
         # pnpm-workspace.yaml, so a floating major silently changed where the
         # build-script policy is read from. CI and a laptop now agree.
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
           package_json_file: site/package.json
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -81,7 +81,7 @@ jobs:
         run: tar -C dist -czf "../${ARTIFACT_NAME}.tar.gz" .
 
       - name: Upload static artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}.tar.gz
@@ -98,10 +98,10 @@ jobs:
       - name: Checkout repository
         # deploy/deploy.sh and the two nginx confs it ships are the deploy logic;
         # CI runs the same script the operator runs by hand.
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Download static artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: .
@@ -112,9 +112,15 @@ jobs:
           tar -xzf "${ARTIFACT_NAME}.tar.gz" -C site/dist
 
       - name: Start ssh-agent
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: ${{ secrets.PROD_DEPLOY_SSH_PRIVATE_KEY }}
+        # Three lines of ssh-agent rather than a third-party action, so nothing
+        # outside this file ever handles the deploy key.
+        env:
+          KEY: ${{ secrets.PROD_DEPLOY_SSH_PRIVATE_KEY }}
+        run: |
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$KEY" | ssh-add - 2> /dev/null
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
       - name: Pin the host key
         # Recorded once rather than passing StrictHostKeyChecking=no, so a
