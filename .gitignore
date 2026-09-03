@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+site/dist/
+site/tsconfig.tsbuildinfo
+
+# The workshop: plates, prompts, and the scripts that make them. The site ships
+# the pictures, not the means of making them.
+art/
+
+# Local-only config: the origin's address
+deploy/.env
+
+# Working notes, not documentation
+docs/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.local
+.claude/
