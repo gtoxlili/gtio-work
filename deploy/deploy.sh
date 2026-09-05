@@ -49,7 +49,12 @@ echo "▸ smoke"
 # happened, so a flaky link on the machine running this should report honestly
 # rather than exit on the first blip and skip the remaining checks.
 failed=()
-for path in / /zh/ /en/ /img/og.jpg /gpu/hero.webp /film/city.json; do
+# The film lives under a content hash, so ask the build which one shipped
+# rather than naming a path that moves every time it is recut.
+rev="$(basename "$(ls -d "$ROOT"/site/dist/film/*/ 2>/dev/null | head -1)")"
+paths=(/ /zh/ /en/ /img/og.jpg /gpu/hero.webp)
+[ -n "$rev" ] && paths+=("/film/$rev/city.json")
+for path in "${paths[@]}"; do
   code=000
   for _ in 1 2 3; do
     code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H 'Accept-Language: zh-CN' \
