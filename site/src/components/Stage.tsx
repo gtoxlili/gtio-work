@@ -46,7 +46,8 @@ export function Stage() {
     const root = document.documentElement
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const narrow = window.innerWidth < 880
-    const stem = narrow ? 'city-768' : 'city'
+    // Content-addressed: a recut is a new path, so nothing has to be purged.
+    const base = `/film/${filmMeta.rev}/${narrow ? 'city-768' : 'city'}`
     let screen: FilmScreen | null = null
     let source: FilmSource | null = null
     let alive = true
@@ -143,11 +144,11 @@ export function Stage() {
     const startSource = async () => {
       // AV1 is half the bytes; H.264 decodes everywhere WebCodecs exists.
       const av1 = await FilmSource.decodes('av01.0.08M.08')
-      const file = av1 ? `${stem}.av1` : `${stem}.h264`
-      const index = (await (await fetch(`/film/${av1 ? `${stem}.av1` : stem}.json`)).json()) as FilmIndex
+      const stream = av1 ? `${base}.av1` : `${base}.h264`
+      const index = (await (await fetch(`${stream}.json`)).json()) as FilmIndex
       const s = new FilmSource(index)
       source = s
-      s.load(`/film/${file}`).catch(err => console.warn('film stream', err))
+      s.load(stream).catch(err => console.warn('film stream', err))
     }
 
     const start = async () => {
@@ -183,7 +184,7 @@ export function Stage() {
             seeking = false
             video.classList.add('on')
           })
-          video.src = '/film/city.mp4'
+          video.src = `/film/${filmMeta.rev}/city.mp4`
           video.load()
         } else {
           current = 'still'
