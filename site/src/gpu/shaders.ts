@@ -2,13 +2,12 @@
  * WGSL for the city.
  *
  * One photograph of the model, displaced by the depth packed into its alpha
- * channel. CITY_MESH_WGSL draws it as a lit mesh and writes view depth to a
- * second target; POST_WGSL reads that depth for the shallow focus. On load,
- * COMPUTE_WGSL and RENDER_WGSL assemble the same image once out of a cloud of
- * particles, then hand over to the mesh and stop.
+ * channel. COMPUTE_WGSL and RENDER_WGSL assemble the opening photograph once
+ * out of a cloud of particles; POST_WGSL composes the frame onto the canvas
+ * with a vignette and grain. The screen itself lives in film/shaders.ts.
  */
 
-const COMMON = /* wgsl */ `
+export const COMMON = /* wgsl */ `
 fn hash13(n: f32) -> vec3f {
   var p3 = fract(vec3f(n) * vec3f(0.1031, 0.1030, 0.0973));
   p3 += dot(p3, p3.yzx + 33.33);
@@ -162,139 +161,6 @@ fn fs(in: VO) -> FO {
   var o: FO;
   o.c = vec4f(in.c.rgb * a, a);
   o.z = vec4f(in.z, 0.0, 0.0, 0.0);
-  return o;
-}
-`
-
-/**
- * The city: one depth-displaced photograph, lit. Normals come from the depth
- * map, so a key light, a rim and a small highlight move over the model as the
- * camera orbits; a soft spotlight follows the current shot; the ultramarine
- * details breathe. The pass also writes view depth for the post pass.
- */
-export const CITY_MESH_WGSL = /* wgsl */ `
-struct MU {
-  view: mat4x4f,
-  proj: mat4x4f,
-  model: mat4x4f,
-  offset: vec2f,
-  boxW: f32,
-  boxH: f32,
-  aspect: f32,
-  depth: f32,
-  gridW: f32,
-  gridH: f32,
-  intro: f32,
-  fade: f32,
-  meshN: f32,
-  spotAmt: f32,
-  spotR: f32,
-  // eye is a vec3f, so it aligns to the next 16 bytes: floats 61..63 are padding.
-  eye: vec3f,
-  time: f32,
-  focus: vec3f,
-  _pad1: f32,
-};
-
-@group(0) @binding(0) var<uniform> mu: MU;
-@group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var tex: texture_2d<f32>;
-
-${COMMON}
-
-struct VO {
-  @builtin(position) p: vec4f,
-  @location(0) uv: vec2f,
-  @location(1) viewZ: f32,
-  @location(2) world: vec3f,
-};
-
-struct FO {
-  @location(0) c: vec4f,
-  @location(1) z: vec4f,
-};
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VO {
-  let n = u32(mu.meshN);
-  let quad = vi / 6u;
-  let corner = vi % 6u;
-  var cx = array<u32, 6>(0u, 1u, 0u, 0u, 1u, 1u);
-  var cy = array<u32, 6>(0u, 0u, 1u, 1u, 0u, 1u);
-  let qx = quad % n;
-  let qy = quad / n;
-  let uv = vec2f(f32(qx + cx[corner]) / f32(n), f32(qy + cy[corner]) / f32(n));
-  let d = textureSampleLevel(tex, samp, uv, 0.0).a;
-  let local = planePosOf(uv, mu.aspect, d, mu.boxW, mu.boxH, mu.depth);
-  let wp4 = mu.model * vec4f(local, 1.0);
-  let vp = mu.view * wp4;
-  var cp = mu.proj * vp;
-  cp = vec4f(cp.xy + mu.offset * cp.w, cp.zw);
-  var o: VO;
-  o.p = cp;
-  o.uv = uv;
-  o.viewZ = -vp.z;
-  o.world = wp4.xyz;
-  return o;
-}
-
-@fragment
-fn fs(in: VO) -> FO {
-  let c = textureSample(tex, samp, in.uv);
-  let i = cellOf(in.uv, mu.gridW, mu.gridH);
-  let r = hash13(f32(i) * 0.7318 + 11.0);
-  var a = cellAssembled(assembleOf(mu.intro, r)) * feather(in.uv) * mu.fade;
-
-  // Neighbouring depths: the silhouette cut and the surface normal share them.
-  let e = 1.6 / mu.meshN;
-  let dl = textureSample(tex, samp, in.uv - vec2f(e, 0.0)).a;
-  let dr = textureSample(tex, samp, in.uv + vec2f(e, 0.0)).a;
-  let du = textureSample(tex, samp, in.uv - vec2f(0.0, e)).a;
-  let dd = textureSample(tex, samp, in.uv + vec2f(0.0, e)).a;
-  let jump = max(abs(dr - dl), abs(dd - du));
-  // Stretched skirts at depth jumps become matte board instead of a hole, so
-  // they take the same dimming as their surroundings.
-  let cut = smoothstep(0.09, 0.16, jump);
-  if (a < 0.01) { discard; }
-
-  // Normal of the relief (world z = (depth - 0.5) * mu.depth; x spans 2*aspect, y spans 2).
-  // The depth map is 8-bit, so a wider stencil and a dead zone keep flat
-  // surfaces flat instead of terraced.
-  let en = 4.0 / mu.meshN;
-  let nl = textureSample(tex, samp, in.uv - vec2f(en, 0.0)).a;
-  let nr = textureSample(tex, samp, in.uv + vec2f(en, 0.0)).a;
-  let nu = textureSample(tex, samp, in.uv - vec2f(0.0, en)).a;
-  let nd = textureSample(tex, samp, in.uv + vec2f(0.0, en)).a;
-  let q = 2.5 / 255.0;
-  let gu = sign(nr - nl) * max(abs(nr - nl) - q, 0.0);
-  let gv = sign(nd - nu) * max(abs(nd - nu) - q, 0.0);
-  let dzdu = gu / (2.0 * en) * mu.depth;
-  let dzdv = gv / (2.0 * en) * mu.depth;
-  let nrm = normalize(vec3f(-dzdu / (2.0 * mu.aspect), dzdv / 2.0, 1.0));
-  let L = normalize(vec3f(-0.45, 0.7, 0.6));
-  let V = normalize(mu.eye - in.world);
-  let H = normalize(L + V);
-  let ndl = max(dot(nrm, L), 0.0);
-  let spec = pow(max(dot(nrm, H), 0.0), 28.0) * 0.06;
-  let rim = pow(1.0 - max(dot(nrm, V), 0.0), 3.0) * 0.08;
-  var color = c.rgb * (0.8 + 0.2 * ndl) + vec3f(spec + rim);
-
-  // Spotlight on the current shot: outside it the city dims and cools a little.
-  let dxy = length(in.world.xy - mu.focus.xy);
-  let inside = 1.0 - smoothstep(mu.spotR, mu.spotR * 2.2, dxy);
-  let dim = mix(1.0, mix(0.62, 1.0, inside), mu.spotAmt);
-  let gray = dot(color, vec3f(0.3, 0.59, 0.11));
-  color = mix(vec3f(gray), color, 1.0 - 0.35 * (1.0 - inside) * mu.spotAmt) * dim;
-
-  // The ultramarine details are the only colour in the model; let them breathe.
-  let blueness = clamp((c.b - max(c.r, c.g)) * 4.0, 0.0, 1.0);
-  color += vec3f(0.18, 0.28, 1.0) * blueness * (0.16 + 0.12 * sin(mu.time * 2.4 + in.uv.x * 9.0));
-
-  color = mix(color, vec3f(0.906, 0.898, 0.875) * dim, cut);
-
-  var o: FO;
-  o.c = vec4f(color * a, a);
-  o.z = vec4f(in.viewZ, 0.0, 0.0, 0.0);
   return o;
 }
 `

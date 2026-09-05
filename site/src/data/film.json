@@ -1,0 +1,151 @@
+{
+ "w": 1280,
+ "h": 704,
+ "fps": 12,
+ "total": 3040,
+ "chapters": [
+  {
+   "slug": "hero",
+   "dwell": [
+    0,
+    1
+   ],
+   "flight": [
+    0,
+    96
+   ]
+  },
+  {
+   "slug": "jianghu",
+   "dwell": [
+    92,
+    188
+   ],
+   "flight": [
+    184,
+    280
+   ]
+  },
+  {
+   "slug": "lark-arena",
+   "dwell": [
+    276,
+    372
+   ],
+   "flight": [
+    368,
+    464
+   ]
+  },
+  {
+   "slug": "codemode-go",
+   "dwell": [
+    460,
+    556
+   ],
+   "flight": [
+    552,
+    648
+   ]
+  },
+  {
+   "slug": "keyward",
+   "dwell": [
+    644,
+    740
+   ],
+   "flight": [
+    736,
+    924
+   ]
+  },
+  {
+   "slug": "streamhub",
+   "dwell": [
+    920,
+    1016
+   ],
+   "flight": [
+    1012,
+    1200
+   ]
+  },
+  {
+   "slug": "defai-relay",
+   "dwell": [
+    1196,
+    1292
+   ],
+   "flight": [
+    1288,
+    1476
+   ]
+  },
+  {
+   "slug": "wechat-finder-dlna",
+   "dwell": [
+    1472,
+    1568
+   ],
+   "flight": [
+    1564,
+    1752
+   ]
+  },
+  {
+   "slug": "scriptorium",
+   "dwell": [
+    1748,
+    1844
+   ],
+   "flight": [
+    1840,
+    2028
+   ]
+  },
+  {
+   "slug": "deckforge",
+   "dwell": [
+    2024,
+    2120
+   ],
+   "flight": [
+    2116,
+    2304
+   ]
+  },
+  {
+   "slug": "wechat-chatgpt",
+   "dwell": [
+    2300,
+    2396
+   ],
+   "flight": [
+    2392,
+    2580
+   ]
+  },
+  {
+   "slug": "section",
+   "dwell": [
+    2576,
+    2672
+   ],
+   "flight": [
+    2668,
+    2856
+   ]
+  },
+  {
+   "slug": "figure",
+   "dwell": [
+    2852,
+    2948
+   ],
+   "flight": [
+    2944,
+    3040
+   ]
+  }
+ ]
+}

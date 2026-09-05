@@ -1,27 +1,31 @@
 /**
- * One scroll model for the whole page. It decides which two pictures are on
- * stage and how far the hand-off between them has run, how present each
- * chapter's text is, and when the canvas lets go at the end. Everything reads
- * from here inside a single requestAnimationFrame.
+ * One scroll model for the whole page. Scroll position is time in the film:
+ * every chapter section spends its first part dwelling on its building (the
+ * text is up) and the rest flying to the next one. The hero holds its opening
+ * photograph, then dives into the city.
  */
+import film from './data/film.json'
 
-/** Where inside a chapter its picture is whole, in chapter units. */
-const CENTRE = 0.35
-/** Slack either side of a centre where the picture stays whole. */
-const DEAD = 0.03
+/** fraction of a chapter section spent on its dwell */
+const DWELL = 0.55
+/** fraction of the hero section that holds the opening photograph */
+const HOLD = 0.3
 
-export type ScrollModel = {
-  /** index of the picture on stage, or the one leaving it */
-  a: number
-  /** 0 = picture a is whole; 1 = picture a + 1 is whole */
-  t: number
+type ScrollModel = {
   raw: number
+  /** which chapter's text and rail mark are current */
   chapter: number
+  /** frame of the film for this scroll position */
+  frame: number
   /** canvas opacity, 0 once the page has moved past the last chapter */
   fade: number
   vh: number
   vw: number
 }
+
+type Range = [number, number]
+type Chapter = { slug: string; dwell: Range; flight: Range }
+const chapters = film.chapters as Chapter[]
 
 /**
  * `releaseRaw` is where the last chapter's panel unpins, measured in chapter
@@ -32,28 +36,39 @@ export function readScroll(chapterCount: number, chapterHeight: number, releaseR
   const vw = window.innerWidth
   const last = chapterCount - 1
   const raw = chapterHeight > 0 ? window.scrollY / chapterHeight : 0
-  // The clamp sits at the last chapter's own centre, not at its start, so its
-  // picture can finish arriving.
-  const prog = Math.min(Math.max(raw, 0), last + CENTRE)
-  const v = prog - CENTRE
-  const a = Math.max(0, Math.floor(v))
-  const f = v - Math.floor(v)
-  const t = v < 0 ? 0 : clamp((f - DEAD) / (1 - 2 * DEAD))
   const fade = 1 - smooth(releaseRaw, releaseRaw + 0.4, raw)
-  // The counter and rail flip at the midpoint between two centres.
-  return { a, t, raw, chapter: Math.min(last, Math.floor(prog + 0.15)), fade, vh, vw }
+  const prog = Math.min(Math.max(raw, 0), last + 1 - 1e-6)
+  // The counter and rail flip halfway through a flight.
+  const chapter = Math.min(last, Math.floor(prog + (1 - DWELL) / 2))
+  return { raw, chapter, frame: frameAt(prog), fade, vh, vw }
 }
 
-/** Text visibility for a chapter at progress `local` (0..1 inside the chapter). */
-export function textPresence(local: number) {
-  // Text is there while its picture is whole: it arrives as the picture
-  // finishes condensing and leaves as the picture starts to break up.
-  const enter = smooth(0.06, 0.2, local)
-  const exit = 1 - smooth(0.5, 0.64, local)
+/** The film frame for a position in chapter units. */
+function frameAt(prog: number): number {
+  const i = Math.min(chapters.length - 1, Math.max(0, Math.floor(prog)))
+  const local = Math.min(1, Math.max(0, prog - i))
+  const c = chapters[i]
+  if (i === 0) {
+    if (local < HOLD) return c.dwell[0]
+    return lerp(c.flight, (local - HOLD) / (1 - HOLD))
+  }
+  if (local < DWELL) return lerp(c.dwell, local / DWELL)
+  return lerp(c.flight, (local - DWELL) / (1 - DWELL))
+}
+
+function lerp([a, b]: Range, t: number) {
+  return a + (Math.max(b - 1, a) - a) * clamp(t)
+}
+
+/** Text visibility for chapter `i` at progress `local` (0..1 inside its section). */
+export function textPresence(i: number, local: number) {
+  if (i === 0) return 1 - smooth(HOLD - 0.02, HOLD + 0.2, local)
+  const enter = smooth(0.0, 0.07, local)
+  const exit = 1 - smooth(DWELL - 0.1, DWELL - 0.02, local)
   return Math.min(enter, exit)
 }
 
-export function smooth(a: number, b: number, x: number) {
+function smooth(a: number, b: number, x: number) {
   const t = clamp((x - a) / (b - a))
   return t * t * (3 - 2 * t)
 }

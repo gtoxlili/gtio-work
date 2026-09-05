@@ -186,16 +186,36 @@ html.gpu .stage-stills {
   transition: opacity 0.9s ease;
   overflow: hidden;
 }
-.still img {
-  transition: transform 0.15s linear;
-  will-change: transform;
-}
 .still[data-on] {
   opacity: 1;
 }
 .still img {
   width: 100%;
   height: auto;
+}
+/* The frame without WebGPU: a 2D canvas or a seeking video in the same box. */
+.stage-flat {
+  position: absolute;
+  top: 50%;
+  right: var(--gutter);
+  width: min(56vw, 900px);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.stage-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.stage-frame.on {
+  opacity: 1;
+}
+html.gpu .stage-flat,
+html.nogpu.stage-still .stage-flat {
+  display: none;
 }
 .stage-caption {
   position: absolute;
@@ -327,6 +347,12 @@ html.js:not(.stage-ready) .chapter:not(:first-child) .panel {
 @media (prefers-reduced-motion: reduce) {
   .scroll-cue::before {
     animation: none;
+  }
+}
+/* On a short window the hero text reaches the cue; the cue gives way. */
+@media (max-height: 760px) {
+  .scroll-cue {
+    display: none;
   }
 }
 
@@ -628,7 +654,8 @@ html.nogpu .foot-nogpu {
     gap: 2px;
     padding-bottom: 8px;
   }
-  .still {
+  .still,
+  .stage-flat {
     top: 12px;
     right: 50%;
     transform: translateX(50%);

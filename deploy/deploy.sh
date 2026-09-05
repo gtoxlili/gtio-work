@@ -49,7 +49,7 @@ echo "▸ smoke"
 # happened, so a flaky link on the machine running this should report honestly
 # rather than exit on the first blip and skip the remaining checks.
 failed=()
-for path in / /zh/ /en/ /img/og.jpg /gpu/city.webp; do
+for path in / /zh/ /en/ /img/og.jpg /gpu/hero.webp /film/city.json; do
   code=000
   for _ in 1 2 3; do
     code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H 'Accept-Language: zh-CN' \

@@ -34,8 +34,8 @@ export const hero = {
   } as Bi,
   meta: { en: 'Gt · South China · Rust, Go, TypeScript', zh: 'Gt · 华南 · Rust、Go、TypeScript' } as Bi,
   caption: {
-    en: 'The city, building by building, as the page scrolls.',
-    zh: '随页面滚动，小城一栋一栋展开。',
+    en: 'The city from above. The film needs a browser that decodes video.',
+    zh: '小城的鸟瞰。影片需要能解码视频的浏览器。',
   } as Bi,
 }
 
@@ -142,11 +142,11 @@ export const footer = {
     zh: '页面本身没有统计脚本；Cloudflare 可能在边缘计一次访问。只有一个记语言的 cookie。',
   } as Bi,
   colophon: {
-    en: "Archivo, with the system's own Chinese. The city is one photograph lifted by its depth map; the 262,144 particles that assemble it are a WebGPU compute shader.",
-    zh: '拉丁字体 Archivo，中文用系统字体。小城是一张照片按深度置换而成；聚合它的 262,144 个粒子是一段 WebGPU compute shader。',
+    en: "Archivo, with the system's own Chinese. The opening photograph assembles from 262,144 particles in a WebGPU compute shader. From there the page scrubs a film of the model, one exact frame per scroll position: each chapter circles its building, then flies to the next.",
+    zh: '拉丁字体 Archivo，中文用系统字体。开场那张照片由 262,144 个粒子在 WebGPU compute shader 里聚合而成。之后页面随滚动逐帧播放一部这座模型的影片，每个滚动位置对应一帧：每一章绕着自己那栋楼转一圈，再飞向下一栋。',
   } as Bi,
   noGpu: {
-    en: 'Without WebGPU the city holds still. It moves in Chrome, Edge, Safari 26 and Firefox 141 or newer.',
-    zh: '没有 WebGPU 时小城是静止的；在 Chrome、Edge、Safari 26、Firefox 141 及更新的版本里它会动。',
+    en: 'Without WebGPU the film still plays frame by frame; only the particle opening needs it. Chrome, Edge, Safari 26 and Firefox 141 or newer have it.',
+    zh: '没有 WebGPU，影片照样逐帧播放，只有粒子开场需要它；Chrome、Edge、Safari 26、Firefox 141 及更新的版本都有。',
   } as Bi,
 }

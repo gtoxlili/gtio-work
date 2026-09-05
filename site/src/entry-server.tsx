@@ -29,6 +29,6 @@ export function head(lang: Lang) {
     `<meta property="og:image:height" content="630" />`,
     `<meta property="og:locale" content="${locale}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
-    `<link rel="preload" as="fetch" href="/gpu/city.webp" crossorigin="anonymous" fetchpriority="high" />`,
+    `<link rel="preload" as="fetch" href="/gpu/hero.webp" crossorigin="anonymous" fetchpriority="high" />`,
   ].join('\n    ')
 }
