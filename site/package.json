@@ -9,7 +9,7 @@
     "preview": "vite preview --configLoader native",
     "images": "tsx scripts/images.ts",
     "github": "tsx scripts/github.ts",
-    "lint": "biome check .",
+    "lint": "biome check --vcs-enabled=true --vcs-client-kind=git --vcs-use-ignore-file=true --vcs-root=.. .",
     "format": "biome check --write .",
     "type-check": "tsc -b --force"
   },

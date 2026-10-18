@@ -59,3 +59,19 @@ async function upload(directory) {
   }
 }
 await upload('dist/film')
+
+// Release only the legacy origin records. Other apex records, including mail, stay owned by their services.
+const zone = process.env.CLOUDFLARE_ZONE_ID
+if (!zone) throw new Error('CLOUDFLARE_ZONE_ID is required')
+for (const hostname of ['gtio.work', 'www.gtio.work']) {
+  const recordsUrl = `https://api.cloudflare.com/client/v4/zones/${zone}/dns_records`
+  const response = await fetch(`${recordsUrl}?name=${hostname}`, { headers })
+  const records = await response.json()
+  if (!records.success) throw new Error(`DNS lookup failed for ${hostname}`)
+  for (const record of records.result) {
+    if (record.type === 'A' && record.content === '82.40.35.63') {
+      const removal = await fetch(`${recordsUrl}/${record.id}`, { headers, method: 'DELETE' })
+      if (!removal.ok) throw new Error(`Could not release the legacy DNS record for ${hostname}`)
+    }
+  }
+}
