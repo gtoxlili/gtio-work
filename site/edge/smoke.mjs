@@ -40,7 +40,7 @@ const get = (pathname, options = {}) =>
       'User-Agent': 'Mozilla/5.0 (compatible; SiteDeployCheck/1.0; +https://www.gtio.work)',
       ...options.headers,
     },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(45000),
   })
 try {
   let ready = Boolean(origin)
