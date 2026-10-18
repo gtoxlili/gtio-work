@@ -1,89 +1,96 @@
 import assert from 'node:assert/strict'
-import { spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 
-// Exercise HTTP behavior against workerd and its real local R2 implementation.
-const directory = await mkdtemp(path.join(os.tmpdir(), 'site-edge-'))
-const file = path.join(directory, 'probe.txt')
-await writeFile(file, '0123456789abcdef')
-const put = spawnSync(
-  'pnpm',
-  [
-    'exec',
-    'wrangler',
-    'r2',
-    'object',
-    'put',
-    'site-media/film/probe.txt',
-    '--local',
-    '--persist-to',
-    directory,
-    '--file',
-    file,
-  ],
-  { stdio: 'pipe' },
-)
-if (put.status !== 0) throw new Error(put.stderr.toString())
-const child = spawn(
-  'pnpm',
-  ['exec', 'wrangler', 'dev', '--local', '--persist-to', directory, '--ip', '127.0.0.1', '--port', '18793'],
-  { detached: true, stdio: 'pipe' },
-)
+// Exercise the language Worker and native asset server locally and after deployment.
+const origin = process.env.SITE_ORIGIN
+const directory = origin ? null : await mkdtemp(path.join(os.tmpdir(), 'site-assets-'))
+const child = origin
+  ? null
+  : spawn(
+      'pnpm',
+      ['exec', 'wrangler', 'dev', '--local', '--persist-to', directory, '--ip', '127.0.0.1', '--port', '18793'],
+      { detached: true, stdio: 'pipe' },
+    )
 let output = ''
-child.stdout.on('data', data => {
+child?.stdout.on('data', data => {
   output += data
 })
-child.stderr.on('data', data => {
+child?.stderr.on('data', data => {
   output += data
 })
-const base = 'http://127.0.0.1:18793'
+// RFC 9110 section 14.2 permits a server to ignore Range and send the full 200.
+// FilmSource.load consumes the complete stream; a partial response must match its byte range.
+async function checkRange(response, source, start, end) {
+  assert.ok([200, 206].includes(response.status))
+  const partial = response.status === 206
+  assert.equal(response.headers.get('Content-Range'), partial ? `bytes ${start}-${end}/${source.length}` : null)
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), partial ? source.subarray(start, end + 1) : source)
+}
+
+const base = origin ?? 'http://127.0.0.1:18793'
+const get = (pathname, options = {}) =>
+  fetch(`${base}${pathname}`, {
+    ...options,
+    headers: {
+      'Accept-Encoding': 'identity',
+      'User-Agent': 'Mozilla/5.0 (compatible; SiteDeployCheck/1.0; +https://www.gtio.work)',
+      ...options.headers,
+    },
+    signal: AbortSignal.timeout(15000),
+  })
 try {
-  let ready = false
-  for (let i = 0; i < 40; i++) {
+  let ready = Boolean(origin)
+  for (let i = 0; !ready && i < 40; i++) {
     try {
-      if ((await fetch(base)).ok) {
-        ready = true
-        break
-      }
+      ready = (await get('/')).ok
     } catch {
       /* workerd is starting */
     }
-    await setTimeout(500)
+    if (!ready) await setTimeout(500)
   }
   assert.ok(ready, output)
-  let response = await fetch(base, { headers: { 'Accept-Language': 'zh-CN' } })
+  let response = await get('/', { headers: { 'Accept-Language': 'zh-CN' } })
   assert.match(await response.text(), /lang="zh-CN"/)
   assert.equal(response.headers.get('Cache-Control'), 'no-cache')
-  response = await fetch(base, { headers: { 'Accept-Language': 'zh-CN', Cookie: 'lang=en' } })
+  response = await get('/', { headers: { 'Accept-Language': 'zh-CN', Cookie: 'lang=en' } })
   assert.match(await response.text(), /lang="en"/)
-  response = await fetch(`${base}/film/probe.txt`, { headers: { Range: 'bytes=2-5' } })
-  assert.equal(response.status, 206)
-  assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/16')
-  assert.equal(await response.text(), '2345')
-  response = await fetch(`${base}/film/probe.txt`, { headers: { Range: 'bytes=99-' } })
-  assert.equal(response.status, 416)
-  assert.equal(response.headers.get('Content-Range'), 'bytes */16')
-  response = await fetch(`${base}/film/probe.txt`)
+  response = await get('/zh/')
+  assert.match(await response.text(), /lang="zh-CN"/)
+
+  const { rev } = JSON.parse(await readFile('src/data/film.json', 'utf8'))
+  const pathname = `/film/${rev}/city.json`
+  const source = await readFile(`public${pathname}`)
+  response = await get(pathname)
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('Content-Range'), null)
-  assert.equal(await response.text(), '0123456789abcdef')
-  response = await fetch(`${base}/film/probe.txt`, { headers: { Range: 'bytes=2-5', 'If-Range': '"old-version"' } })
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), source)
+  assert.match(response.headers.get('Cache-Control'), /immutable/)
+  const etag = response.headers.get('ETag')
+  assert.ok(etag)
+  response = await get(pathname, { headers: { Range: 'bytes=2-5' } })
+  await checkRange(response, source, 2, 5)
+  response = await get(pathname, { method: 'HEAD' })
   assert.equal(response.status, 200)
-  assert.equal(await response.text(), '0123456789abcdef')
-  response = await fetch(`${base}/film/probe.txt`, { method: 'HEAD' })
-  assert.equal(response.headers.get('Content-Length'), '16')
   assert.equal(await response.text(), '')
-  response = await fetch(`${base}/film/probe.txt`, { headers: { 'If-None-Match': response.headers.get('ETag') } })
+  response = await get(pathname, { headers: { 'If-None-Match': etag } })
   assert.equal(response.status, 304)
-  response = await fetch(`${base}/film/missing`)
+
+  const binary = `/film/${rev}/city.h264`
+  const bytes = await readFile(`public${binary}`)
+  response = await get(binary, { headers: { Range: 'bytes=0-4095' } })
+  await checkRange(response, bytes, 0, 4095)
+  response = await get('/film/missing')
   assert.equal(response.status, 404)
   assert.equal(response.headers.get('Cache-Control'), 'no-store')
-  console.log('Language selection and R2 HTTP semantics passed')
+  console.log(`Language selection and native Static Assets media delivery passed: ${base}`)
 } finally {
-  process.kill(-child.pid, 'SIGTERM')
-  await new Promise(resolve => child.once('exit', resolve))
-  await rm(directory, { recursive: true, force: true })
+  if (child) {
+    process.kill(-child.pid, 'SIGTERM')
+    await new Promise(resolve => child.once('exit', resolve))
+    await rm(directory, { recursive: true, force: true })
+  }
 }

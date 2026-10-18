@@ -101,20 +101,16 @@ jobs:
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: .
-      - name: Publish media and Worker
+      - name: Publish Worker and Static Assets
         env:
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CI: "true"
         run: |
           tar -xzf "../${ARTIFACT_NAME}.tar.gz" -C .
-          node edge/upload-media.mjs
           pnpm exec wrangler deploy
       - name: Probe published languages and media
-        run: |
-          curl -fsS https://www.gtio.work/ >/dev/null
-          curl -fsS https://www.gtio.work/zh/ | grep -q 'lang="zh-CN"'
-          rev="$(node -p 'JSON.parse(require("fs").readFileSync("src/data/film.json", "utf8")).rev')"
-          curl -fsS "https://www.gtio.work/film/$rev/city.json" >/dev/null
+        env:
+          SITE_ORIGIN: https://www.gtio.work
+        run: node edge/smoke.mjs

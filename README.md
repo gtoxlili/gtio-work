@@ -35,7 +35,7 @@ site/     The page. src/film decodes and draws the film, src/gpu is the
           to frames, src/content holds every string twice. public/film is the
           stream and its index; src/data/film.json says where each chapter's
           dwell and flight sit in it.
-deploy/   The vhost and the script that ships it.
+site/edge/ The language Worker and the HTTP verification used by CI.
 ```
 
 ## Running it
@@ -58,10 +58,13 @@ that only happens on the machine that has them.
 
 ## Deploying
 
-Push to `main`. The workflow verifies the Worker against workerd, uploads the
-content-addressed film files to R2, and publishes Workers Static Assets.
+Push to `main`. The workflow verifies against workerd, publishes the Worker
+and all static files together, then checks the public HTTP endpoints.
 `site/wrangler.jsonc` owns both custom domains. The Worker selects the landing
-page language and serves same-origin film requests, including Range and ETag.
+page language; Cloudflare Static Assets serves all media and handles HTTP caching.
+The player streams complete files, without requiring partial responses.
+Media files live under content-addressed paths and
+each file must fit the platform's 25 MiB asset limit.
 
 Actions uses `CLOUDFLARE_API_KEY` and `CLOUDFLARE_EMAIL`, sourced from the Dev /
 Cloudflare item in 1Password, with `CLOUDFLARE_ACCOUNT_ID` as a repository variable.
