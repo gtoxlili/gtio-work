@@ -45,7 +45,7 @@ From `site/`:
 ```bash
 pnpm install
 pnpm dev       # localhost:5173
-pnpm build     # type-check, bundle, prerender both languages, compress
+pnpm build     # type-check, bundle, prerender both languages
 ```
 
 `pnpm lint` is Biome. `pnpm github` recounts the ledger, and a scheduled
@@ -58,13 +58,14 @@ that only happens on the machine that has them.
 
 ## Deploying
 
-Push to `main`. The workflow builds, then runs `deploy/deploy.sh`, which rsyncs
-`site/dist` to the origin and reloads nginx. The same script deploys from a
-laptop, so there is one deploy path rather than two that drift.
+Push to `main`. The workflow verifies the Worker against workerd, uploads the
+content-addressed film files to R2, and publishes Workers Static Assets.
+`site/wrangler.jsonc` owns both custom domains. The Worker selects the landing
+page language and serves same-origin film requests, including Range and ETag.
 
-The origin's address is not in this repo. Copy `deploy/.env.example` to
-`deploy/.env` to deploy by hand. CI reads the same values from repository
-variables and takes its SSH key from a repository secret.
+Actions uses `CLOUDFLARE_API_KEY` and `CLOUDFLARE_EMAIL`, sourced from the Dev /
+Cloudflare item in 1Password, with `CLOUDFLARE_ACCOUNT_ID` as a repository variable.
+The website has no VPS deployment dependency.
 
 ## License
 

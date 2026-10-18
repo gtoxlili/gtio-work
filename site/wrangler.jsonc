@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "personal-site",
+  "main": "edge/worker.mjs",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "run_worker_first": ["/", "/en", "/en/", "/zh", "/zh/", "/film/*"]
+  },
+  "r2_buckets": [{ "binding": "FILM", "bucket_name": "site-media" }],
+  "routes": [{ "pattern": "www.gtio.work", "custom_domain": true }, { "pattern": "gtio.work", "custom_domain": true }],
+  "observability": { "enabled": true }
+}

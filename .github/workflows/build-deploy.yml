@@ -1,13 +1,3 @@
-# Build and publish www.gtio.work.
-#
-# Required repository secret:
-# - PROD_DEPLOY_SSH_PRIVATE_KEY  ed25519 private key whose public half is in
-#                                ~/.ssh/authorized_keys on the origin box.
-#                                Repo-level rather than environment-level:
-#                                deployment environments need GitHub Pro on a
-#                                private repository, and this account is Free.
-# Required repository variables:
-# - PROD_DEPLOY_HOST, PROD_DEPLOY_USER   (PROD_DEPLOY_PORT defaults to 22)
 name: Build and Deploy
 
 on:
@@ -26,10 +16,7 @@ concurrency:
 
 env:
   NODE_VERSION: "24"
-  ARTIFACT_NAME: gtio-work-dist
-  DEPLOY_HOST: ${{ vars.PROD_DEPLOY_HOST }}
-  DEPLOY_PORT: ${{ vars.PROD_DEPLOY_PORT || '22' }}
-  DEPLOY_USER: ${{ vars.PROD_DEPLOY_USER }}
+  ARTIFACT_NAME: site-dist
 
 jobs:
   verify:
@@ -77,8 +64,11 @@ jobs:
       - name: Build production bundle
         run: pnpm build
 
+      - name: Verify Worker HTTP behavior
+        run: node edge/smoke.mjs
+
       - name: Pack static artifact
-        run: tar -C dist -czf "../${ARTIFACT_NAME}.tar.gz" .
+        run: tar -czf "../${ARTIFACT_NAME}.tar.gz" dist
 
       - name: Upload static artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -86,49 +76,44 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}.tar.gz
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   deploy:
-    name: Deploy to Production
+    name: Deploy to Cloudflare
     needs: verify
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-
+    defaults:
+      run:
+        working-directory: site
     steps:
-      - name: Checkout repository
-        # deploy/deploy.sh and the two nginx confs it ships are the deploy logic;
-        # CI runs the same script the operator runs by hand.
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Download static artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: .
-
-      - name: Unpack static artifact
-        run: |
-          mkdir -p site/dist
-          tar -xzf "${ARTIFACT_NAME}.tar.gz" -C site/dist
-
-      - name: Start ssh-agent
-        # Three lines of ssh-agent rather than a third-party action, so nothing
-        # outside this file ever handles the deploy key.
+      - name: Publish media and Worker
         env:
-          KEY: ${{ secrets.PROD_DEPLOY_SSH_PRIVATE_KEY }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CI: "true"
         run: |
-          eval "$(ssh-agent -s)" > /dev/null
-          printf '%s\n' "$KEY" | ssh-add - 2> /dev/null
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-
-      - name: Pin the host key
-        # Recorded once rather than passing StrictHostKeyChecking=no, so a
-        # changed host key fails the deploy instead of being accepted silently.
+          tar -xzf "../${ARTIFACT_NAME}.tar.gz" -C .
+          node edge/upload-media.mjs
+          pnpm exec wrangler deploy
+      - name: Probe published languages and media
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          ssh-keyscan -p "$DEPLOY_PORT" -t ed25519 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Deploy
-        run: ./deploy/deploy.sh --no-build
+          curl -fsS https://www.gtio.work/ >/dev/null
+          curl -fsS https://www.gtio.work/zh/ | grep -q 'lang="zh-CN"'
+          rev="$(node -p 'JSON.parse(require("fs").readFileSync("src/data/film.json", "utf8")).rev')"
+          curl -fsS "https://www.gtio.work/film/$rev/city.json" >/dev/null

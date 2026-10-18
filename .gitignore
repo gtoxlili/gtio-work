@@ -9,8 +9,8 @@ site/tsconfig.tsbuildinfo
 # the pictures, not the means of making them.
 art/
 
-# Local-only config: the origin's address
-deploy/.env
+# Local Worker development state
+site/.wrangler/
 
 # Working notes, not documentation
 docs/
