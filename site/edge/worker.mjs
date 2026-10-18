@@ -54,7 +54,7 @@ async function film(request, env, ctx) {
     return new Response(null, { status: failedPrecondition ? 412 : 304, headers })
   }
   let status = 200
-  if (object.range) {
+  if (range && object.range) {
     const offset = Math.max(0, object.range.offset ?? object.size - object.range.suffix)
     const length = Math.min(object.range.length ?? object.range.suffix ?? object.size - offset, object.size - offset)
     if (offset >= object.size || length <= 0) {
