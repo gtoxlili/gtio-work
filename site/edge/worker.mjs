@@ -13,12 +13,32 @@ async function film(request, env, ctx) {
   if (!['GET', 'HEAD'].includes(request.method))
     return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
   const key = new URL(request.url).pathname.slice(1)
-  const cached = request.method === 'GET' ? await caches.default.match(request) : null
+  const rangeHeader = request.headers.get('Range')
+  const cached = request.method === 'GET' && !rangeHeader ? await caches.default.match(request) : null
   if (cached) return cached
+  let range
+  if (request.method === 'GET' && rangeHeader) {
+    const metadata = await env.FILM.head(key)
+    if (metadata) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader)
+      const ifRange = request.headers.get('If-Range')
+      const rangeAllowed =
+        !ifRange || ifRange === metadata.httpEtag || metadata.uploaded.getTime() <= Date.parse(ifRange)
+      if (match && rangeAllowed) {
+        const offset = match[1] ? Number(match[1]) : Math.max(0, metadata.size - Number(match[2]))
+        const end = match[1] && match[2] ? Math.min(Number(match[2]), metadata.size - 1) : metadata.size - 1
+        if ((!match[1] && !Number(match[2])) || offset >= metadata.size || end < offset) {
+          return new Response(null, {
+            status: 416,
+            headers: { ...SECURITY, 'Content-Range': `bytes */${metadata.size}` },
+          })
+        }
+        range = { offset, length: end - offset + 1 }
+      }
+    }
+  }
   const object =
-    request.method === 'HEAD'
-      ? await env.FILM.head(key)
-      : await env.FILM.get(key, { range: request.headers, onlyIf: request.headers })
+    request.method === 'HEAD' ? await env.FILM.head(key) : await env.FILM.get(key, { range, onlyIf: request.headers })
   if (!object) return new Response('Not found', { status: 404, headers: { ...SECURITY, 'Cache-Control': 'no-store' } })
   const headers = new Headers(SECURITY)
   object.writeHttpMetadata(headers)
