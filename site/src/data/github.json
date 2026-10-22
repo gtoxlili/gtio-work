@@ -1,12 +1,12 @@
 {
-  "fetchedAt": "2026-10-21T22:32:11Z",
-  "commitsLastYear": 9022,
-  "publicCommitsLastYear": 851,
-  "reposActiveLastYear": 47,
-  "stars": 654,
+  "fetchedAt": "2026-10-22T22:31:38Z",
+  "commitsLastYear": 8918,
+  "publicCommitsLastYear": 763,
+  "reposActiveLastYear": 40,
+  "stars": 652,
   "languages": [
-    "TypeScript",
     "Rust",
+    "TypeScript",
     "Python",
     "Go"
   ]
